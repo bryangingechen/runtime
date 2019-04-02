@@ -68,8 +68,21 @@ function runtime_computeNow() {
   // Any newly-reachable variable must also be recomputed.
   // Any no-longer-reachable variable must be terminated.
   variables = new Set(this._dirty);
-  variables.forEach(function(variable) {
-    variable._inputs.forEach(variables.add, variables);
+  // variables.forEach(function(variable) {
+  //   variable._inputs.forEach(variables.add, variables);
+  //   const reachable = variable_reachable(variable);
+  //   if (reachable > variable._reachable) {
+  //     this._updates.add(variable);
+  //   } else if (reachable < variable._reachable) {
+  //     variable._invalidate();
+  //   }
+  //   variable._reachable = reachable;
+  // }, this);
+  for (const variable of variables) {
+    // variable._inputs.forEach(variables.add, variables);
+    for (const v of variable._inputs) {
+      variables.add(v);
+    }
     const reachable = variable_reachable(variable);
     if (reachable > variable._reachable) {
       this._updates.add(variable);
@@ -77,50 +90,82 @@ function runtime_computeNow() {
       variable._invalidate();
     }
     variable._reachable = reachable;
-  }, this);
+  }
 
   // Compute the transitive closure of updating, reachable variables.
   variables = new Set(this._updates);
-  variables.forEach(function(variable) {
+  // variables.forEach(function(variable) {
+  //   if (variable._reachable) {
+  //     variable._indegree = 0;
+  //     variable._outputs.forEach(variables.add, variables);
+  //   } else {
+  //     variable._indegree = -1;
+  //     variables.delete(variable);
+  //   }
+  // });
+  for (const variable of variables) {
     if (variable._reachable) {
       variable._indegree = 0;
-      variable._outputs.forEach(variables.add, variables);
+      // variable._outputs.forEach(variables.add, variables);
+      for (const v of variable._outputs) {
+        variables.add(v);
+      }
     } else {
       variable._indegree = -1;
       variables.delete(variable);
     }
-  });
+  }
 
   this._computing = null;
   this._updates.clear();
   this._dirty.clear();
 
   // Compute the indegree of updating variables.
-  variables.forEach(function(variable) {
-    variable._outputs.forEach(variable_increment);
-  });
+  // variables.forEach(function(variable) {
+  //   variable._outputs.forEach(variable_increment);
+  // });
+  for (const variable of variables) {
+    for (const v of variable._outputs) {
+      variable_increment(v);
+    }
+  }
 
   // Identify the root variables (those with no updating inputs).
-  variables.forEach(function(variable) {
+  // variables.forEach(function(variable) {
+  //   if (variable._indegree === 0) {
+  //     queue.push(variable);
+  //   }
+  // });
+  for (const variable of variables) {
     if (variable._indegree === 0) {
       queue.push(variable);
     }
-  });
+  }
 
   // Compute the variables in topological order.
   while (variable = queue.pop()) {
     variable_compute(variable);
-    variable._outputs.forEach(postqueue);
+    // variable._outputs.forEach(postqueue);
+    for (const v of variable._outputs) {
+      postqueue(v);
+    }
     variables.delete(variable);
   }
 
   // Any remaining variables have circular definitions.
-  variables.forEach(function(variable) {
-    var error = new RuntimeError("circular definition");
+  // variables.forEach(function(variable) {
+  //   var error = new RuntimeError("circular definition");
+  //   variable._value = undefined;
+  //   (variable._promise = Promise.reject(error)).catch(noop);
+  //   variable._rejected(error);
+  // });
+  for (const variable of variables) {
+    const error = new RuntimeError("circular definition");
     variable._value = undefined;
     (variable._promise = Promise.reject(error)).catch(noop);
     variable._rejected(error);
-  });
+  }
+
 
   function postqueue(variable) {
     if (--variable._indegree === 0) {
@@ -237,7 +282,10 @@ function variable_postrecompute(variable, value, promise) {
   var runtime = variable._module._runtime;
   variable._value = value;
   variable._promise = promise;
-  variable._outputs.forEach(runtime._updates.add, runtime._updates); // TODO Cleaner?
+  // variable._outputs.forEach(runtime._updates.add, runtime._updates); // TODO Cleaner?
+  for (const v of variable._outputs) {
+    runtime._updates.add(v);
+  }
   return runtime._compute();
 }
 
@@ -247,12 +295,16 @@ function variable_return(generator) {
   };
 }
 
+// lots of time spent here?
 function variable_reachable(variable) {
   if (variable._observer !== no_observer) return true; // Directly reachable.
   var outputs = new Set(variable._outputs);
   for (const output of outputs) {
     if (output._observer !== no_observer) return true;
-    output._outputs.forEach(outputs.add, outputs);
+    // output._outputs.forEach(outputs.add, outputs);
+    for (const o of output._outputs) {
+      outputs.add(o);
+    }
   }
   return false;
 }

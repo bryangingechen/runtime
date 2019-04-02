@@ -91,15 +91,24 @@ function variable_define(name, inputs, definition) {
 function variable_defineImpl(name, inputs, definition) {
   var scope = this._module._scope, runtime = this._module._runtime;
 
-  this._inputs.forEach(variable_detach, this);
-  inputs.forEach(variable_attach, this);
+  // this._inputs.forEach(variable_detach, this);
+  for (const v of this._inputs) {
+    variable_detach.call(this, v);
+  }
+  // inputs.forEach(variable_attach, this);
+  for (const v of inputs) {
+    variable_attach.call(this, v);
+  }
   this._inputs = inputs;
   this._definition = definition;
   this._value = undefined;
 
   // Did the variable’s name change? Time to patch references!
   if (name == this._name && scope.get(name) === this) {
-    this._outputs.forEach(runtime._updates.add, runtime._updates);
+    // this._outputs.forEach(runtime._updates.add, runtime._updates);
+    for (const v of this._outputs) {
+      runtime._updates.add(v);
+    }
   } else {
     var error, found;
 
@@ -108,8 +117,14 @@ function variable_defineImpl(name, inputs, definition) {
         scope.delete(this._name);
         found = this._module._resolve(this._name);
         found._outputs = this._outputs, this._outputs = new Set;
-        found._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(this)] = found; }, this);
-        found._outputs.forEach(runtime._updates.add, runtime._updates);
+        // found._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(this)] = found; }, this);
+        for (const output of found._outputs) {
+          output._inputs[output._inputs.indexOf(this)] = found;
+        }
+        // found._outputs.forEach(runtime._updates.add, runtime._updates);
+        for (const output of found._outputs) {
+          runtime._updates.add(output);
+        }
         runtime._dirty.add(found).add(this);
         scope.set(this._name, found);
       } else if ((found = scope.get(this._name)) === this) { // Do no other variables reference this variable?
@@ -121,7 +136,10 @@ function variable_defineImpl(name, inputs, definition) {
           found = found._duplicates.keys().next().value; // Any references are now fixed!
           error = scope.get(this._name);
           found._outputs = error._outputs, error._outputs = new Set;
-          found._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(error)] = found; });
+          // found._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(error)] = found; });
+          for (const output of found._outputs) {
+            output._inputs[output._inputs.indexOf(error)] = found;
+          }
           found._definition = found._duplicate, found._duplicate = undefined;
           runtime._dirty.add(error).add(found);
           runtime._updates.add(found);
@@ -141,7 +159,10 @@ function variable_defineImpl(name, inputs, definition) {
           found._duplicates.add(this);
         } else if (found._type === TYPE_IMPLICIT) { // Are the variable references broken?
           this._outputs = found._outputs, found._outputs = new Set; // Now they’re fixed!
-          this._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(found)] = this; }, this);
+          // this._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(found)] = this; }, this);
+          for (const output of this._outputs) {
+            output._inputs[output._inputs.indexOf(found)] = this;
+          }
           runtime._dirty.add(found).add(this);
           scope.set(name, this);
         } else { // Does another variable define this name?
@@ -150,7 +171,10 @@ function variable_defineImpl(name, inputs, definition) {
           error._name = name;
           error._definition = this._definition = found._definition = variable_duplicate(name);
           error._outputs = found._outputs, found._outputs = new Set;
-          error._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(found)] = error; });
+          // error._outputs.forEach(function(output) { output._inputs[output._inputs.indexOf(found)] = error; });
+          for (const output of error._outputs) {
+            output._inputs[output._inputs.indexOf(found)] = error;
+          }
           error._duplicates = new Set([this, found]);
           runtime._dirty.add(found).add(error);
           runtime._updates.add(found).add(error);
