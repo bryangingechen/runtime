@@ -70,8 +70,13 @@ function module_derive(injects, injectModule) {
   return copy;
 }
 
+// copy: new module object (target?)
+// injectByAlias: map of injections
+// injectModule: source module?
+// map: used to cache newly-copied dependencies?
 function module_copy(copy, injectByAlias, injectModule, map) {
   map.set(this, copy);
+  // for each variable
   this._scope.forEach(function(source, name) {
     var target = new Variable(source._type, copy), inject;
     if (inject = injectByAlias.get(name)) {
@@ -79,6 +84,7 @@ function module_copy(copy, injectByAlias, injectModule, map) {
     } else if (source._definition === identity) { // import!
       var sourceInput = source._inputs[0],
           sourceModule = sourceInput._module,
+          // recursion?
           targetModule = map.get(sourceModule) || sourceModule._copy(new Module(copy._runtime), none, null, map);
       target.import(sourceInput._name, name, targetModule);
     } else {
@@ -88,6 +94,7 @@ function module_copy(copy, injectByAlias, injectModule, map) {
   return copy;
 }
 
+// given a "name" string, resolves it to a variable in the module or builtin
 function module_resolve(name) {
   var variable = this._scope.get(name), value;
   if (!variable)  {

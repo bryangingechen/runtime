@@ -50,6 +50,7 @@ function runtime_dispose() {
   });
 }
 
+// Computation is scheduled as each variable is defined (see variable_defineImpl)
 function runtime_module(define, observer = noop) {
   let module;
   if (define === undefined) {
@@ -64,6 +65,7 @@ function runtime_module(define, observer = noop) {
   this._init = module = new Module(this);
   this._modules.set(define, module);
   try {
+    // In the v3 compiler, "define" returns its "main" module
     define(this, observer);
   } finally {
     this._init = null;
@@ -71,10 +73,13 @@ function runtime_module(define, observer = noop) {
   return module;
 }
 
+// guard against scheduling computation multiple times
+// called in variable_defineImpl and module_value
 function runtime_compute() {
   return this._computing || (this._computing = this._computeSoon());
 }
 
+// schedule computation (promise with requestAnimationFrame)
 function runtime_computeSoon() {
   var runtime = this;
   return new Promise(function(resolve) {
@@ -186,12 +191,14 @@ function variable_intersector(invalidation, variable) {
 }
 
 function variable_compute(variable) {
+  // invalidation occurs at the beginning of next recompute
   variable._invalidate();
   variable._invalidate = noop;
   variable._pending();
   var value0 = variable._value,
       version = ++variable._version,
       invalidation = null,
+      // promise that resolves when all inputs have been computed
       promise = variable._promise = Promise.all(variable._inputs.map(variable_value)).then(function(inputs) {
     if (variable._version !== version) return;
 
@@ -211,6 +218,7 @@ function variable_compute(variable) {
     }
 
     // Compute the initial value of the variable.
+    // "this" will refer to value0
     return variable._definition.apply(value0, inputs);
   }).then(function(value) {
     // If the value is a generator, then retrieve its first value,
@@ -267,6 +275,7 @@ function variable_postrecompute(variable, value, promise) {
   return runtime._compute();
 }
 
+// helper for generator disposal
 function variable_return(generator) {
   return function() {
     generator.return();
